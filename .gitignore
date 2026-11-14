@@ -1,0 +1,29 @@
+# Virtual Environment
+.venv/
+env/
+venv/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pkl
+.cache_*
+
+# Logs & Testing
+*.log
+logs/
+.pytest_cache/
+
+# Processed & Temporary output
+data/processed/*
+!data/processed/.gitkeep
+data/inbox/*
+!data/inbox/.gitkeep
+reports/*.xlsx
+!reports/.gitkeep
+
+# Databases & local configs
+data/recon.db
+data/test_*.db
+.env

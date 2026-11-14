@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon.in Order & Payment Reconciliation Automation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .dropzone { transition: all 0.2s ease-in-out; }
+    .dropzone.dragover { border-color: #3b82f6; background-color: #eff6ff; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Top Navbar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-md">
+          <i data-lucide="scale" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight text-slate-900">Amazon.in Reconciliation</h1>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+
+    <!-- Upload Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+      <div class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-100 gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">Upload Reports for Reconciliation</h2>
+          <p class="text-sm text-slate-500 mt-1">Upload both the Order Report (.txt/.tsv) and Custom Unified Transaction Payment Report (.csv).</p>
+        </div>
+        <button id="btn-demo" type="button" class="inline-flex items-center px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition shadow-xs border border-indigo-200">
+          <i data-lucide="sparkles" class="w-4 h-4 mr-2 text-indigo-600"></i>
+          Load Sample Demo Data
+        </button>
+      </div>
+
+      <form id="recon-form" class="mt-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Dropzone 1: Order Report -->
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-slate-700 flex items-center justify-between">
+              <span>(A) Order Report <span class="text-xs font-normal text-slate-400">(.txt, .tsv)</span></span>
+              <span id="order-status-badge" class="text-xs text-slate-400">Required</span>
+            </label>
+            <div id="dropzone-order" class="dropzone border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 cursor-pointer bg-slate-50/50">
+              <input type="file" id="order_file" name="order_file" accept=".txt,.tsv" class="hidden" />
+              <div id="order-empty" class="space-y-2">
+                <div class="w-12 h-12 mx-auto rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <i data-lucide="file-text" class="w-6 h-6"></i>
+                </div>
+                <p class="text-sm font-medium text-slate-700">Click to browse or drag & drop</p>
+                <p class="text-xs text-slate-400">Amazon Order Report (Tab-separated)</p>
+              </div>
+              <div id="order-selected" class="hidden space-y-1">
+                <i data-lucide="check-circle" class="w-8 h-8 mx-auto text-emerald-500"></i>
+                <p id="order-name" class="text-sm font-semibold text-slate-800 break-all"></p>
+                <p id="order-size" class="text-xs text-slate-400"></p>
+                <button type="button" id="clear-order" class="text-xs text-red-500 hover:underline pt-1">Remove file</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dropzone 2: Payment Report -->
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-slate-700 flex items-center justify-between">
+              <span>(B) Payment Report <span class="text-xs font-normal text-slate-400">(.csv)</span></span>
+              <span id="pmt-status-badge" class="text-xs text-slate-400">Required</span>
+            </label>
+            <div id="dropzone-pmt" class="dropzone border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 cursor-pointer bg-slate-50/50">
+              <input type="file" id="payment_file" name="payment_file" accept=".csv" class="hidden" />
+              <div id="pmt-empty" class="space-y-2">
+                <div class="w-12 h-12 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
+                </div>
+                <p class="text-sm font-medium text-slate-700">Click to browse or drag & drop</p>
+                <p class="text-xs text-slate-400">Custom Unified Transaction Report</p>
+              </div>
+              <div id="pmt-selected" class="hidden space-y-1">
+                <i data-lucide="check-circle" class="w-8 h-8 mx-auto text-emerald-500"></i>
+                <p id="pmt-name" class="text-sm font-semibold text-slate-800 break-all"></p>
+                <p id="pmt-size" class="text-xs text-slate-400"></p>
+                <button type="button" id="clear-pmt" class="text-xs text-red-500 hover:underline pt-1">Remove file</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dropzone 3: Master Payout Sheet -->
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-slate-700 flex items-center justify-between">
+              <span>(C) Master Payout Sheet <span class="text-xs font-normal text-slate-400">(.xlsx, .csv)</span></span>
+              <span id="master-status-badge" class="text-xs text-indigo-500 font-medium">Optional / Auto</span>
+            </label>
+            <div id="dropzone-master" class="dropzone border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 cursor-pointer bg-slate-50/50">
+              <input type="file" id="master_file" name="master_file" accept=".xlsx,.xls,.csv" class="hidden" />
+              <div id="master-empty" class="space-y-2">
+                <div class="w-12 h-12 mx-auto rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <i data-lucide="database" class="w-6 h-6"></i>
+                </div>
+                <p class="text-sm font-medium text-slate-700">Click to browse or drag & drop</p>
+                <p class="text-xs text-slate-400">Master Payout (SKU, Style, Payout)</p>
+              </div>
+              <div id="master-selected" class="hidden space-y-1">
+                <i data-lucide="check-circle" class="w-8 h-8 mx-auto text-emerald-500"></i>
+                <p id="master-name" class="text-sm font-semibold text-slate-800 break-all"></p>
+                <p id="master-size" class="text-xs text-slate-400"></p>
+                <button type="button" id="clear-master" class="text-xs text-red-500 hover:underline pt-1">Remove file</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Hidden Defaults -->
+        <input type="hidden" id="basis" name="basis" value="total_net" />
+
+        <!-- Action Button -->
+        <div class="flex items-center justify-end space-x-3 pt-2">
+          <button id="btn-reconcile" type="submit" class="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition hover:shadow-lg disabled:opacity-50">
+            <i data-lucide="play" class="w-4 h-4 mr-2"></i>
+            <span>Reconcile & Generate Report</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Loading Spinner Banner -->
+    <div id="loading-banner" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
+      <p class="mt-4 font-semibold text-slate-800 text-base">Reconciling Orders & Payment Transactions...</p>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="error-banner" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800 flex items-start space-x-3">
+      <i data-lucide="alert-circle" class="w-5 h-5 text-red-500 shrink-0 mt-0.5"></i>
+      <div id="error-message"></div>
+    </div>
+
+    <!-- Dashboard Results Container (Hidden initially) -->
+    <div id="results-container" class="hidden space-y-6">
+
+      <!-- Action & Download Header -->
+      <div class="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-black tracking-tight">Order + Payment Reconciliation Results</h2>
+        </div>
+        <div>
+          <a id="btn-download-excel" href="#" class="inline-flex items-center justify-center px-6 py-3.5 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg transition hover:scale-105 active:scale-95">
+            <i data-lucide="download" class="w-5 h-5 mr-2"></i>
+            Download Excel Report (.xlsx)
+          </a>
+        </div>
+      </div>
+
+      <!-- Top KPI Metric Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        
+        <!-- Delivered Card -->
+        <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
+          <p class="text-xs font-medium text-slate-400">Delivered Orders</p>
+          <p id="kpi-delivered-count" class="text-2xl font-bold text-emerald-600 mt-1">0</p>
+          <p id="kpi-delivered-amount" class="text-xs font-semibold text-slate-600 mt-1">₹0.00</p>
+        </div>
+
+        <!-- RVP Card -->
+        <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
+          <p class="text-xs font-medium text-slate-400">RVP Customer Returns</p>
+          <p id="kpi-rvp-count" class="text-2xl font-bold text-amber-600 mt-1">0</p>
+          <p id="kpi-rvp-amount" class="text-xs font-semibold text-slate-600 mt-1">₹0.00</p>
+        </div>
+
+        <!-- RTO Card -->
+        <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
+          <p class="text-xs font-medium text-slate-400">RTO Return to Origin</p>
+          <p id="kpi-rto-count" class="text-2xl font-bold text-blue-600 mt-1">0</p>
+          <p id="kpi-rto-amount" class="text-xs font-semibold text-slate-600 mt-1">₹0.00</p>
+        </div>
+
+        <!-- Cancelled Card -->
+        <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
+          <p class="text-xs font-medium text-slate-400">Cancelled / Unsettled</p>
+          <p id="kpi-cancelled-count" class="text-2xl font-bold text-slate-600 mt-1">0</p>
+          <p id="kpi-notsettled-label" class="text-xs text-slate-400 mt-1">0 not settled</p>
+        </div>
+
+        <!-- Total Orders Card -->
+        <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
+          <p class="text-xs font-medium text-slate-400">Total Orders</p>
+          <p id="kpi-orders-count" class="text-2xl font-bold text-indigo-700 mt-1">0</p>
+          <p class="text-xs text-slate-400 mt-1">Order Report master</p>
+        </div>
+
+        <!-- Total Realized Net Card -->
+        <div class="bg-white rounded-xl p-4 border border-indigo-200 shadow-xs bg-indigo-50/20">
+          <p class="text-xs font-medium text-indigo-700">Total Net Realized</p>
+          <p id="kpi-orders-net-total" class="text-2xl font-bold text-indigo-900 mt-1">₹0.00</p>
+          <p class="text-[10px] text-indigo-500 mt-1">Reconciled Net Proceeds</p>
+        </div>
+
+      </div>
+
+      <!-- Order Report Table Section -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        
+        <!-- Table Header & Controls -->
+        <div class="border-b border-slate-200 bg-slate-50/75 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div class="flex items-center space-x-2">
+            <h3 class="text-base font-bold text-slate-900">Order Report Reconciliation</h3>
+            <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+              <span id="tab-orders-count">0</span> Orders
+            </span>
+          </div>
+
+          <div class="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            <div class="flex items-center space-x-2 w-full sm:w-auto">
+              <span class="text-xs font-semibold text-slate-500 whitespace-nowrap">Status:</span>
+              <select id="filter-delivery-status" class="text-xs font-medium rounded-lg border-slate-300 border bg-white px-3 py-1.5 shadow-xs">
+                <option value="ALL">All Statuses</option>
+                <option value="Delivered">Delivered</option>
+                <option value="RVP">RVP</option>
+                <option value="RTO">RTO</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Not settled">Not settled</option>
+              </select>
+            </div>
+            <input type="text" id="search-orders" placeholder="Search Order ID, SKU, Product, City..." class="text-xs w-full sm:w-72 rounded-lg border-slate-300 border px-3 py-1.5 focus:ring-1 focus:ring-indigo-500" />
+          </div>
+        </div>
+
+        <!-- Orders Table -->
+        <div class="p-6">
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-100 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200">
+                <tr>
+                  <th class="px-4 py-3 whitespace-nowrap">Amazon Order ID</th>
+                  <th class="px-3 py-3 text-center whitespace-nowrap">Quantity</th>
+                  <th class="px-4 py-3 whitespace-nowrap">Sku Name</th>
+                  <th class="px-4 py-3 whitespace-nowrap">STYLE NAME</th>
+                  <th class="px-4 py-3 text-center whitespace-nowrap">Order Status</th>
+                  <th class="px-4 py-3 text-right whitespace-nowrap">Total Net (₹)</th>
+                  <th class="px-4 py-3 text-center whitespace-nowrap">Delivery Status</th>
+                  <th class="px-3 py-3 text-center whitespace-nowrap">Delivered Qty</th>
+                  <th class="px-3 py-3 text-center whitespace-nowrap">Return Qty</th>
+                  <th class="px-4 py-3 text-right whitespace-nowrap">NET PRODUCTION COST</th>
+                  <th class="px-4 py-3 text-right whitespace-nowrap">FINAL NET (₹)</th>
+                </tr>
+              </thead>
+              <tbody id="orders-tbody" class="divide-y divide-slate-100 font-medium"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+    Amazon.in Order & Payment Reconciliation
+  </footer>
+
+  <script>
+    lucide.createIcons();
+
+    // DOM Elements
+    const dropzoneOrder = document.getElementById('dropzone-order');
+    const dropzonePmt = document.getElementById('dropzone-pmt');
+    const dropzoneMaster = document.getElementById('dropzone-master');
+    const inputOrder = document.getElementById('order_file');
+    const inputPmt = document.getElementById('payment_file');
+    const inputMaster = document.getElementById('master_file');
+    const form = document.getElementById('recon-form');
+    const btnDemo = document.getElementById('btn-demo');
+    const loadingBanner = document.getElementById('loading-banner');
+    const errorBanner = document.getElementById('error-banner');
+    const errorMessage = document.getElementById('error-message');
+    const resultsContainer = document.getElementById('results-container');
+    const btnDownloadExcel = document.getElementById('btn-download-excel');
+
+    let currentReconData = null;
+
+    // Helper: format currency
+    function fmtCurr(val) {
+      if (val === undefined || val === null) return '₹0.00';
+      const num = Number(val);
+      return (num < 0 ? '-₹' : '₹') + Math.abs(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // Dropzone setup
+    function setupDropzone(zone, input, emptyId, selectedId, nameId, sizeId, clearId) {
+      zone.addEventListener('click', () => input.click());
+
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      });
+
+      ['dragleave', 'dragend'].forEach(ev => {
+        zone.addEventListener(ev, () => zone.classList.remove('dragover'));
+      });
+
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          input.files = e.dataTransfer.files;
+          updateFileInfo();
+        }
+      });
+
+      input.addEventListener('change', updateFileInfo);
+
+      function updateFileInfo() {
+        if (input.files && input.files[0]) {
+          const file = input.files[0];
+          document.getElementById(emptyId).classList.add('hidden');
+          document.getElementById(selectedId).classList.remove('hidden');
+          document.getElementById(nameId).textContent = file.name;
+          document.getElementById(sizeId).textContent = (file.size / 1024).toFixed(1) + ' KB';
+        }
+      }
+
+      document.getElementById(clearId).addEventListener('click', (e) => {
+        e.stopPropagation();
+        input.value = '';
+        document.getElementById(selectedId).classList.add('hidden');
+        document.getElementById(emptyId).classList.remove('hidden');
+      });
+    }
+
+    setupDropzone(dropzoneOrder, inputOrder, 'order-empty', 'order-selected', 'order-name', 'order-size', 'clear-order');
+    setupDropzone(dropzonePmt, inputPmt, 'pmt-empty', 'pmt-selected', 'pmt-name', 'pmt-size', 'clear-pmt');
+    setupDropzone(dropzoneMaster, inputMaster, 'master-empty', 'master-selected', 'master-name', 'master-size', 'clear-master');
+
+    // Tab navigation
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => {
+          b.classList.remove('border-indigo-600', 'text-indigo-600');
+          b.classList.add('border-transparent', 'text-slate-500');
+        });
+        btn.classList.add('border-indigo-600', 'text-indigo-600');
+        btn.classList.remove('border-transparent', 'text-slate-500');
+
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+        document.getElementById(btn.dataset.tab).classList.remove('hidden');
+      });
+    });
+
+    // Submit handler
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!inputOrder.files[0] && !inputPmt.files[0]) {
+        showError('Please select at least one Order or Payment report file to reconcile.');
+        return;
+      }
+      const formData = new FormData(form);
+      await executeRecon('/api/reconcile', formData);
+    });
+
+    // Demo button handler
+    btnDemo.addEventListener('click', async () => {
+      const formData = new FormData();
+      formData.append('basis', 'total_net');
+      await executeRecon('/api/demo', formData);
+    });
+
+    async function executeRecon(url, formData) {
+      hideError();
+      loadingBanner.classList.remove('hidden');
+      resultsContainer.classList.add('hidden');
+
+      try {
+        const resp = await fetch(url, { method: 'POST', body: formData });
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          throw new Error(data.detail || 'Reconciliation failed. Please check input formats.');
+        }
+
+        currentReconData = data;
+        renderResults(data);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        loadingBanner.classList.add('hidden');
+      }
+    }
+
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      errorBanner.classList.remove('hidden');
+    }
+
+    function hideError() {
+      errorBanner.classList.add('hidden');
+    }
+
+    function renderResults(data) {
+      const s = data.summary;
+      const basisTag = document.getElementById('result-basis-tag');
+      if (basisTag) basisTag.textContent = `Basis: ${data.basis}`;
+
+      // KPIs
+      document.getElementById('kpi-delivered-count').textContent = s.delivered_count;
+      document.getElementById('kpi-delivered-amount').textContent = fmtCurr(s.delivered_amount);
+
+      document.getElementById('kpi-rvp-count').textContent = s.rvp_count;
+      document.getElementById('kpi-rvp-amount').textContent = fmtCurr(s.rvp_amount);
+
+      document.getElementById('kpi-rto-count').textContent = s.rto_count;
+      document.getElementById('kpi-rto-amount').textContent = fmtCurr(s.rto_amount);
+
+      document.getElementById('kpi-cancelled-count').textContent = s.cancelled_count;
+      document.getElementById('kpi-notsettled-label').textContent = `${s.not_settled_count} not settled`;
+
+      document.getElementById('kpi-orders-count').textContent = data.orders.length;
+      const netTotal = data.orders.reduce((acc, o) => acc + (Number(o.total_net) || 0), 0);
+      document.getElementById('kpi-orders-net-total').textContent = fmtCurr(netTotal);
+
+      // Download Button Link
+      btnDownloadExcel.href = `/api/download/${data.report_id}`;
+
+      // Order Count Badge
+      document.getElementById('tab-orders-count').textContent = data.orders.length;
+
+      renderOrdersTable(data.orders);
+
+      resultsContainer.classList.remove('hidden');
+      resultsContainer.scrollIntoView({ behavior: 'smooth' });
+      lucide.createIcons();
+    }
+
+    function renderOrdersTable(orders) {
+      const tbody = document.getElementById('orders-tbody');
+      tbody.innerHTML = '';
+
+      orders.forEach(o => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition';
+
+        let statusBadge = '';
+        if (o.delivery_status === 'Delivered') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">Delivered</span>';
+        } else if (o.delivery_status === 'RVP') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">RVP</span>';
+        } else if (o.delivery_status === 'RTO') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">RTO</span>';
+        } else if (o.delivery_status === 'Cancelled') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700">Cancelled</span>';
+        } else {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-yellow-100 text-yellow-800">' + (o.delivery_status || 'Not settled') + '</span>';
+        }
+
+        const netClass = o.total_net < 0 ? 'text-red-600 font-bold' : (o.total_net > 0 ? 'text-slate-800 font-semibold' : 'text-slate-400');
+        const finalNetVal = o.final_net !== undefined ? o.final_net : (o.total_net - (o.net_production_cost || 0));
+        const finalNetClass = finalNetVal < 0 ? 'text-red-600 font-bold' : (finalNetVal > 0 ? 'text-emerald-700 font-bold' : 'text-slate-400');
+        const skuVal = o.sku_name || o.sku || '-';
+        const styleVal = o.style_name || '<span class="text-slate-300">-</span>';
+        const netProdCost = o.net_production_cost !== undefined ? o.net_production_cost : (o.production_cost || 0);
+        const prodCostVal = (o.delivery_status === 'Delivered' && netProdCost > 0)
+          ? fmtCurr(netProdCost)
+          : '<span class="text-slate-300">₹0.00</span>';
+
+        tr.innerHTML = `
+          <td class="px-4 py-2.5 font-mono text-[11px] text-indigo-700 font-semibold whitespace-nowrap">${o.amazon_order_id}</td>
+          <td class="px-3 py-2.5 text-center font-bold text-slate-800">${o.quantity}</td>
+          <td class="px-4 py-2.5 font-mono text-[11px] text-slate-800 whitespace-nowrap font-semibold" title="${skuVal}">${skuVal}</td>
+          <td class="px-4 py-2.5 text-slate-700 whitespace-nowrap font-medium">${styleVal}</td>
+          <td class="px-4 py-2.5 text-center whitespace-nowrap text-slate-600">${o.order_status}</td>
+          <td class="px-4 py-2.5 text-right whitespace-nowrap ${netClass}">${fmtCurr(o.total_net)}</td>
+          <td class="px-4 py-2.5 text-center whitespace-nowrap">${statusBadge}</td>
+          <td class="px-3 py-2.5 text-center font-bold text-emerald-700">${o.delivered_qty !== undefined ? o.delivered_qty : 0}</td>
+          <td class="px-3 py-2.5 text-center font-bold ${(o.return_qty || 0) > 0 ? 'text-amber-700' : 'text-slate-400'}">${o.return_qty !== undefined ? o.return_qty : 0}</td>
+          <td class="px-4 py-2.5 text-right whitespace-nowrap text-amber-700 font-semibold">${prodCostVal}</td>
+          <td class="px-4 py-2.5 text-right whitespace-nowrap ${finalNetClass}">${fmtCurr(finalNetVal)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Filter & search orders table
+    function filterOrders() {
+      if (!currentReconData) return;
+      const term = document.getElementById('search-orders').value.toLowerCase().trim();
+      const statusFilter = document.getElementById('filter-delivery-status').value;
+
+      const filtered = currentReconData.orders.filter(o => {
+        const matchesStatus = (statusFilter === 'ALL' || o.delivery_status === statusFilter);
+        const matchesTerm = (
+          !term ||
+          (o.amazon_order_id && o.amazon_order_id.toLowerCase().includes(term)) ||
+          (o.sku && o.sku.toLowerCase().includes(term)) ||
+          (o.sku_name && o.sku_name.toLowerCase().includes(term)) ||
+          (o.style_name && o.style_name.toLowerCase().includes(term)) ||
+          (o.order_status && o.order_status.toLowerCase().includes(term))
+        );
+        return matchesStatus && matchesTerm;
+      });
+      renderOrdersTable(filtered);
+    }
+
+    document.getElementById('search-orders').addEventListener('input', filterOrders);
+    document.getElementById('filter-delivery-status').addEventListener('change', filterOrders);
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,42 @@
+# Amazon.in Order + Payment Reconciliation Tool Configuration
+
+# Reconciliation tolerances
+amount_tolerance: 0.01
+timezone: "Asia/Kolkata"
+
+# Pricing & Tax settings
+item_price_includes_tax: true
+
+# Delivery status calculation basis: "total_net" (negative = RVP, 0 = RTO, positive = Delivered)
+delivery_status_basis: "total_net"
+
+# Exclude payment-only orders from output sheets unless set to true
+include_payment_only_orders: false
+
+# Folder paths (relative to project root)
+folder_paths:
+  orders_raw: "data/raw/orders"
+  payments_raw: "data/raw/payments"
+  master: "data/master"
+  inbox: "data/inbox"
+  processed: "data/processed"
+  reports: "reports"
+  logs: "logs"
+
+report_output_dir: "reports"
+
+# Order status mapping for expected receivables
+order_status_map:
+  "Shipped - Delivered to Buyer":
+    expected_receivable: true
+  "Shipped":
+    expected_receivable: true
+  "Cancelled":
+    expected_receivable: false
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_file: "logs/reconciliation.log"
+  max_bytes: 10485760 # 10 MB
+  backup_count: 5
