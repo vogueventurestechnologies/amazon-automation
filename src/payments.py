@@ -160,6 +160,7 @@ def load_payment_report(
     file_path: Path | str,
     config: AppConfig,
     run_id: str = "DEFAULT_RUN",
+    archive_raw: bool = False,
 ) -> PaymentParseResult:
     """Parse an Amazon Custom Unified Transaction payment report into an order pivot and non-order groups.
 
@@ -167,6 +168,7 @@ def load_payment_report(
         file_path: Path to payment report (.csv).
         config: Application configuration.
         run_id: Identifier for current execution.
+        archive_raw: If True, copies file to config.payments_raw_dir.
 
     Returns:
         PaymentParseResult containing lines_df, order_pivot_df, non_order_df, grand_total, exceptions.
@@ -175,23 +177,26 @@ def load_payment_report(
     if not path.exists():
         raise FileNotFoundError(f"Payment report file not found: {path}")
 
-    # Copy untouched to raw payments directory if not already there
-    config.ensure_directories()
-    dest_path = config.payments_raw_dir / path.name
-    if dest_path.resolve() != path:
-        shutil.copy2(path, dest_path)
-        logger.info(f"Copied raw payment report to {dest_path}")
+    if archive_raw:
+        config.ensure_directories()
+        dest_path = config.payments_raw_dir / path.name
+        if dest_path.resolve() != path:
+            shutil.copy2(path, dest_path)
+            logger.info(f"Copied raw payment report to {dest_path}")
+        target_path = dest_path
+    else:
+        target_path = path
 
-    file_hash = compute_file_hash(dest_path)
-    file_name = dest_path.name
+    file_hash = compute_file_hash(target_path)
+    file_name = target_path.name
     exceptions: List[PaymentException] = []
 
     # Find preamble header line dynamically
-    header_idx = find_header_row_index(dest_path)
+    header_idx = find_header_row_index(target_path)
     logger.info(f"Detected payment header row at line {header_idx} in '{file_name}'")
 
     raw_df = pd.read_csv(
-        dest_path,
+        target_path,
         skiprows=header_idx,
         encoding="utf-8-sig",
         dtype=str,

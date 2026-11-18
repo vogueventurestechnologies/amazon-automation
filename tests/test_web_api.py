@@ -70,3 +70,41 @@ def test_run_demo_endpoint_total_net():
     assert data["summary"]["rto_count"] == 0
     assert data["summary"]["cancelled_count"] == 1
 
+
+def test_reconcile_ephemeral_zero_disk_storage():
+    """Verify customer uploads via /api/reconcile leave zero files on disk."""
+    if not (REAL_ORDER_FILE.exists() and REAL_PAYMENT_FILE.exists()):
+        pytest.skip("Sample files not found on test machine")
+
+    import io
+    from fastapi import UploadFile
+    from api.index import reconcile_files
+
+    proj_root = Path(__file__).resolve().parent.parent
+    raw_orders_before = [f for f in (proj_root / "data" / "raw" / "orders").glob("*") if f.name != ".gitkeep"]
+    raw_pmts_before = [f for f in (proj_root / "data" / "raw" / "payments").glob("*") if f.name != ".gitkeep"]
+    reports_before = [f for f in (proj_root / "reports").glob("*.xlsx") if f.name != ".gitkeep"]
+
+    with open(REAL_ORDER_FILE, "rb") as f_ord, open(REAL_PAYMENT_FILE, "rb") as f_pmt:
+        ord_upload = UploadFile(filename=REAL_ORDER_FILE.name, file=io.BytesIO(f_ord.read()))
+        pmt_upload = UploadFile(filename=REAL_PAYMENT_FILE.name, file=io.BytesIO(f_pmt.read()))
+
+        res = reconcile_files(order_file=ord_upload, payment_file=pmt_upload, basis="total_net")
+        assert res.status_code == 200
+        data = json.loads(res.body.decode("utf-8"))
+        assert data["success"] is True
+
+        # Test download from memory
+        dl_res = download_excel(data["report_id"])
+        assert dl_res.status_code == 200
+        assert len(dl_res.body) > 0
+
+    # Verify zero files added to disk
+    raw_orders_after = [f for f in (proj_root / "data" / "raw" / "orders").glob("*") if f.name != ".gitkeep"]
+    raw_pmts_after = [f for f in (proj_root / "data" / "raw" / "payments").glob("*") if f.name != ".gitkeep"]
+    reports_after = [f for f in (proj_root / "reports").glob("*.xlsx") if f.name != ".gitkeep"]
+
+    assert len(raw_orders_after) == len(raw_orders_before) == 0
+    assert len(raw_pmts_after) == len(raw_pmts_before) == 0
+    assert len(reports_after) == len(reports_before) == 0
+

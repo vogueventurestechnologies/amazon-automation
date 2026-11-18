@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from src.config import AppConfig, load_config
 from src.pipeline import PipelineResult, classify_files, format_console_summary, run_reconciliation_pipeline
@@ -37,7 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-REPORTS_CACHE: Dict[str, Path] = {}
+REPORTS_CACHE: Dict[str, Any] = {}
 SAMPLE_ORDER_FILE = (
     PROJECT_ROOT / "data" / "raw" / "orders" / "157818151187020770.txt"
     if (PROJECT_ROOT / "data" / "raw" / "orders" / "157818151187020770.txt").exists()
@@ -138,11 +138,16 @@ def _build_response_payload(pipeline_res: PipelineResult, report_id: str, is_dem
                 "details": str(getattr(exc, "details", "")),
             })
 
+    report_name = (
+        getattr(pipeline_res, "report_filename", None)
+        or (pipeline_res.report_path.name if pipeline_res.report_path else "order_payment_recon.xlsx")
+    )
+
     return {
         "success": True,
         "is_demo": is_demo,
         "report_id": report_id,
-        "report_filename": pipeline_res.report_path.name,
+        "report_filename": report_name,
         "basis": pipeline_res.basis_used,
         "summary": {
             "delivered_count": pipeline_res.delivery_status_counts.get("Delivered", 0),
@@ -197,7 +202,11 @@ def reconcile_files(
     to_date: Optional[str] = Form(None),
 ):
     """Reconcile uploaded Order and Payment reports and return dashboard data + report ID."""
-    if not order_file and not payment_file and not master_file:
+    has_order = isinstance(order_file, UploadFile) and bool(order_file.filename)
+    has_pmt = isinstance(payment_file, UploadFile) and bool(payment_file.filename)
+    has_master = isinstance(master_file, UploadFile) and bool(master_file.filename)
+
+    if not has_order and not has_pmt and not has_master:
         raise HTTPException(status_code=400, detail="Please upload at least one Order or Payment report file.")
 
     temp_dir = Path(tempfile.mkdtemp(prefix="recon_upload_"))
@@ -205,29 +214,29 @@ def reconcile_files(
     master_path: Optional[Path] = None
 
     try:
-        if order_file and order_file.filename:
+        if has_order:
             ord_path = temp_dir / order_file.filename
             with open(ord_path, "wb") as f:
                 content = order_file.file.read()
                 f.write(content)
             uploaded_paths.append(ord_path)
 
-        if payment_file and payment_file.filename:
+        if has_pmt:
             pmt_path = temp_dir / payment_file.filename
             with open(pmt_path, "wb") as f:
                 content = payment_file.file.read()
                 f.write(content)
             uploaded_paths.append(pmt_path)
 
-        if master_file and master_file.filename:
+        if has_master:
             master_path = temp_dir / master_file.filename
             with open(master_path, "wb") as f:
                 content = master_file.file.read()
                 f.write(content)
 
         config = load_config()
-        clean_from = from_date.strip() if from_date and from_date.strip() else None
-        clean_to = to_date.strip() if to_date and to_date.strip() else None
+        clean_from = from_date.strip() if isinstance(from_date, str) and from_date.strip() else None
+        clean_to = to_date.strip() if isinstance(to_date, str) and to_date.strip() else None
 
         classified_orders, classified_pmts, unrec = classify_files(uploaded_paths)
         pipeline_res = run_reconciliation_pipeline(
@@ -239,10 +248,15 @@ def reconcile_files(
             to_date=clean_to,
             basis_override=basis,
             master_file=master_path,
+            ephemeral=True,
+            archive_raw=False,
         )
 
         report_id = str(uuid.uuid4())[:8]
-        REPORTS_CACHE[report_id] = pipeline_res.report_path
+        REPORTS_CACHE[report_id] = {
+            "filename": pipeline_res.report_filename,
+            "bytes": pipeline_res.report_bytes,
+        }
 
         payload = _build_response_payload(pipeline_res, report_id, is_demo=False)
         return JSONResponse(content=payload)
@@ -268,10 +282,15 @@ def run_demo(basis: str = Form("total_net")):
         auto_mode=False,
         basis_override=basis,
         master_file=SAMPLE_MASTER_FILE if SAMPLE_MASTER_FILE.exists() else None,
+        ephemeral=True,
+        archive_raw=False,
     )
 
     report_id = str(uuid.uuid4())[:8]
-    REPORTS_CACHE[report_id] = pipeline_res.report_path
+    REPORTS_CACHE[report_id] = {
+        "filename": pipeline_res.report_filename,
+        "bytes": pipeline_res.report_bytes,
+    }
 
     payload = _build_response_payload(pipeline_res, report_id, is_demo=True)
     return JSONResponse(content=payload)
@@ -279,23 +298,22 @@ def run_demo(basis: str = Form("total_net")):
 
 @app.get("/api/download/{report_id}")
 def download_excel(report_id: str):
-    """Download the generated Excel reconciliation report."""
+    """Download the generated Excel reconciliation report directly from memory."""
     if report_id not in REPORTS_CACHE:
-        latest_file = PROJECT_ROOT / "reports" / "order_payment_recon_latest.xlsx"
-        if latest_file.exists():
-            return FileResponse(
-                path=str(latest_file),
-                filename="order_payment_recon_latest.xlsx",
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-        raise HTTPException(status_code=404, detail="Report expired or not found.")
+        raise HTTPException(status_code=404, detail="Report expired or not found. Please re-run reconciliation.")
 
-    report_path = REPORTS_CACHE[report_id]
-    if not report_path.exists():
-        raise HTTPException(status_code=404, detail="Report file not found on disk.")
-
-    return FileResponse(
-        path=str(report_path),
-        filename=report_path.name,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+    cached = REPORTS_CACHE[report_id]
+    if isinstance(cached, dict) and "bytes" in cached and cached["bytes"]:
+        filename = cached.get("filename", "order_payment_recon.xlsx")
+        return Response(
+            content=cached["bytes"],
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    elif isinstance(cached, Path) and cached.exists():
+        return FileResponse(
+            path=str(cached),
+            filename=cached.name,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    raise HTTPException(status_code=404, detail="Report file not found.")

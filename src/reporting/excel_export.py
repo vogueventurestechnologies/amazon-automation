@@ -10,10 +10,11 @@ Generates /reports/order_payment_recon_<from>_<to>.xlsx containing:
 
 from datetime import datetime
 from decimal import Decimal
+import io
 import logging
 from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 import pandas as pd
 import xlsxwriter
 
@@ -832,11 +833,13 @@ def _write_payment_only_sheet(
 def generate_reconciliation_excel_report(
     recon_res: ReconciliationResult,
     config: AppConfig,
-    lines_df: pd.DataFrame,
+    lines_df: Optional[pd.DataFrame] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
-    output_path: Optional[str | Path] = None,
-) -> Path:
+    output_path: Optional[Union[Path, str, io.BytesIO]] = None,
+    save_latest_copy: bool = True,
+    ephemeral: bool = False,
+) -> Union[Path, io.BytesIO]:
     """Generate the complete 5-sheet reconciliation Excel workbook.
 
     Args:
@@ -845,13 +848,13 @@ def generate_reconciliation_excel_report(
         lines_df: Raw parsed payment lines from Phase 3.
         from_date: Optional start date filter (IST, YYYY-MM-DD).
         to_date: Optional end date filter (IST, YYYY-MM-DD).
-        output_path: Optional destination path.
+        output_path: Optional destination path or io.BytesIO buffer.
+        save_latest_copy: Whether to copy to order_payment_recon_latest.xlsx (default True).
+        ephemeral: If True, generates workbook purely in-memory (io.BytesIO) and writes nothing to disk.
 
     Returns:
-        Path to the generated Excel file.
+        Path to the generated Excel file, or io.BytesIO in ephemeral mode.
     """
-    config.ensure_directories()
-
     # Determine date range label
     if from_date and to_date:
         date_label = f"{from_date} to {to_date}"
@@ -865,6 +868,26 @@ def generate_reconciliation_excel_report(
     else:
         date_label = "All available dates"
         file_suffix = "all"
+
+    # Ephemeral / in-memory mode: zero disk footprint
+    if ephemeral or isinstance(output_path, io.BytesIO):
+        buffer = output_path if isinstance(output_path, io.BytesIO) else io.BytesIO()
+        workbook = xlsxwriter.Workbook(buffer, {"strings_to_numbers": False, "in_memory": True})
+        formats = _build_excel_formats(workbook)
+
+        # 1. Sheet 1: Order Pivot
+        _write_order_pivot_sheet(workbook, formats, recon_res.recon_df, date_label, recon_res.basis_used)
+
+        # 2. Optional Sheet: Payment Only Orders (only if configured)
+        if getattr(config, "include_payment_only_orders", False) and not recon_res.payment_only_df.empty:
+            _write_payment_only_sheet(workbook, formats, recon_res.payment_only_df, date_label)
+
+        workbook.close()
+        buffer.seek(0)
+        logger.info("Excel workbook generated in-memory (ephemeral mode).")
+        return buffer
+
+    config.ensure_directories()
 
     # Resolve output path
     if output_path is None:
@@ -888,13 +911,14 @@ def generate_reconciliation_excel_report(
     workbook.close()
     logger.info(f"Excel workbook generated successfully: {target_file}")
 
-    # Also update convenience alias order_payment_recon_latest.xlsx
-    latest_file = config.reports_dir / "order_payment_recon_latest.xlsx"
-    try:
-        import shutil
-        shutil.copy2(target_file, latest_file)
-        logger.info(f"Updated latest report copy: {latest_file}")
-    except Exception as e:
-        logger.debug(f"Could not copy latest report: {e}")
+    # Also update convenience alias order_payment_recon_latest.xlsx if enabled
+    if save_latest_copy:
+        latest_file = config.reports_dir / "order_payment_recon_latest.xlsx"
+        try:
+            import shutil
+            shutil.copy2(target_file, latest_file)
+            logger.info(f"Updated latest report copy: {latest_file}")
+        except Exception as e:
+            logger.debug(f"Could not copy latest report: {e}")
 
     return target_file

@@ -23,6 +23,14 @@ data/inbox/*
 reports/*.xlsx
 !reports/.gitkeep
 
+# Raw customer uploads (never track in git)
+data/raw/orders/*
+!data/raw/orders/.gitkeep
+data/raw/payments/*
+!data/raw/payments/.gitkeep
+data/raw/master/*
+!data/raw/master/.gitkeep
+
 # Databases & local configs
 data/recon.db
 data/test_*.db

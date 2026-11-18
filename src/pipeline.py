@@ -45,12 +45,14 @@ class PipelineResult:
     delivery_status_amounts: Dict[str, Decimal]
     exceptions_count: int
     exception_severities: Dict[str, int]
-    report_path: Path
+    report_path: Optional[Path]
     basis_used: str
     from_date: Optional[str]
     to_date: Optional[str]
     excluded_payment_count: int = 0
     recon_res: Optional[ReconciliationResult] = None
+    report_bytes: Optional[bytes] = None
+    report_filename: str = "order_payment_recon.xlsx"
 
 
 def compute_file_md5(file_path: Path) -> str:
@@ -113,6 +115,7 @@ def load_multiple_order_reports(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
     run_id: str = "MULTI_ORD",
+    archive_raw: bool = False,
 ) -> OrderParseResult:
     """Load, combine, and deduplicate multiple order reports idempotently."""
     if not files:
@@ -125,8 +128,7 @@ def load_multiple_order_reports(
     seen_file_hashes: set[str] = set()
 
     for f in files:
-        raw_copy = copy_to_raw_untouched(f, config.orders_raw_dir)
-        parse_res = load_order_report(raw_copy, config, run_id=run_id)
+        parse_res = load_order_report(f, config, run_id=run_id, archive_raw=archive_raw)
         if parse_res.file_hash in seen_file_hashes:
             logger.info(f"Skipping duplicate order file with hash {parse_res.file_hash}: {f.name}")
             continue
@@ -205,6 +207,7 @@ def load_multiple_payment_reports(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
     run_id: str = "MULTI_PMT",
+    archive_raw: bool = False,
 ) -> PaymentParseResult:
     """Load, combine, and deduplicate multiple payment reports idempotently."""
     if not files:
@@ -218,8 +221,7 @@ def load_multiple_payment_reports(
     seen_file_hashes: set[str] = set()
 
     for f in files:
-        raw_copy = copy_to_raw_untouched(f, config.payments_raw_dir)
-        parse_res = load_payment_report(raw_copy, config, run_id=run_id)
+        parse_res = load_payment_report(f, config, run_id=run_id, archive_raw=archive_raw)
         if parse_res.file_hash in seen_file_hashes:
             logger.info(f"Skipping duplicate payment file with hash {parse_res.file_hash}: {f.name}")
             continue
@@ -345,10 +347,15 @@ def run_reconciliation_pipeline(
     master_file: Optional[Path | str] = None,
     run_id: Optional[str] = None,
     output_excel_path: Optional[Path | str] = None,
+    archive_raw: Optional[bool] = None,
+    ephemeral: bool = False,
 ) -> PipelineResult:
     """Run full reconciliation pipeline from input files to Excel report."""
     run_id = run_id or f"RUN_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    config.ensure_directories()
+    if not ephemeral:
+        config.ensure_directories()
+
+    should_archive = archive_raw if archive_raw is not None else (auto_mode and not ephemeral)
 
     # Determine delivery status basis
     if basis_override:
@@ -379,17 +386,27 @@ def run_reconciliation_pipeline(
 
     logger.info(
         f"Pipeline start [{run_id}]: {len(classified_orders)} order report(s), "
-        f"{len(classified_payments)} payment report(s), basis='{basis_used}'"
+        f"{len(classified_payments)} payment report(s), basis='{basis_used}', ephemeral={ephemeral}"
     )
 
     # Load and combine order reports
     order_res = load_multiple_order_reports(
-        classified_orders, config, from_date=from_date, to_date=to_date, run_id=run_id
+        classified_orders,
+        config,
+        from_date=from_date,
+        to_date=to_date,
+        run_id=run_id,
+        archive_raw=should_archive,
     )
 
     # Load and combine payment reports
     pmt_res = load_multiple_payment_reports(
-        classified_payments, config, from_date=from_date, to_date=to_date, run_id=run_id
+        classified_payments,
+        config,
+        from_date=from_date,
+        to_date=to_date,
+        run_id=run_id,
+        archive_raw=should_archive,
     )
 
     # Load master payout sheet (auto-discover if not provided)
@@ -402,7 +419,7 @@ def run_reconciliation_pipeline(
                 break
 
     from src.master import load_master_payout
-    master_map = load_master_payout(discovered_master, config=config)
+    master_map = load_master_payout(discovered_master, config=config, use_cache=not ephemeral)
 
     # Execute reconciliation join
     recon_res = reconcile_orders_and_payments(
@@ -415,14 +432,41 @@ def run_reconciliation_pipeline(
     )
 
     # Generate Excel Report
-    report_path = generate_reconciliation_excel_report(
-        recon_res=recon_res,
-        config=config,
-        lines_df=pmt_res.lines_df,
-        from_date=from_date,
-        to_date=to_date,
-        output_path=output_excel_path,
-    )
+    report_bytes: Optional[bytes] = None
+    if ephemeral:
+        buffer = generate_reconciliation_excel_report(
+            recon_res=recon_res,
+            config=config,
+            lines_df=pmt_res.lines_df,
+            from_date=from_date,
+            to_date=to_date,
+            output_path=None,
+            save_latest_copy=False,
+            ephemeral=True,
+        )
+        report_bytes = buffer.getvalue()
+        report_path = None
+        if from_date and to_date:
+            file_suffix = f"{from_date}_{to_date}"
+        elif from_date:
+            file_suffix = f"from_{from_date}"
+        elif to_date:
+            file_suffix = f"to_{to_date}"
+        else:
+            file_suffix = "all"
+        report_filename = f"order_payment_recon_{file_suffix}.xlsx"
+    else:
+        report_path = generate_reconciliation_excel_report(
+            recon_res=recon_res,
+            config=config,
+            lines_df=pmt_res.lines_df,
+            from_date=from_date,
+            to_date=to_date,
+            output_path=output_excel_path,
+            save_latest_copy=True,
+            ephemeral=False,
+        )
+        report_filename = report_path.name
 
     # In auto mode: move processed files from inbox to /data/processed/
     if auto_mode and config.inbox_dir.exists():
@@ -475,6 +519,8 @@ def run_reconciliation_pipeline(
         to_date=to_date,
         excluded_payment_count=recon_res.excluded_payment_count,
         recon_res=recon_res,
+        report_bytes=report_bytes,
+        report_filename=report_filename,
     )
 
     return result

@@ -137,6 +137,7 @@ def load_order_report(
     file_path: Path | str,
     config: AppConfig,
     run_id: str = "DEFAULT_RUN",
+    archive_raw: bool = False,
 ) -> OrderParseResult:
     """Parse an Amazon order report into an item-level dataframe and an order-level summary.
 
@@ -144,6 +145,7 @@ def load_order_report(
         file_path: Path to order report (.txt / .tsv).
         config: Application configuration.
         run_id: Identifier for current execution.
+        archive_raw: If True, copies file to config.orders_raw_dir.
 
     Returns:
         OrderParseResult containing items_df, summary_df, and exceptions.
@@ -152,24 +154,27 @@ def load_order_report(
     if not path.exists():
         raise FileNotFoundError(f"Order report file not found: {path}")
 
-    # Copy untouched to raw orders directory if not already there
-    config.ensure_directories()
-    dest_path = config.orders_raw_dir / path.name
-    if dest_path.resolve() != path:
-        shutil.copy2(path, dest_path)
-        logger.info(f"Copied raw order report to {dest_path}")
+    if archive_raw:
+        config.ensure_directories()
+        dest_path = config.orders_raw_dir / path.name
+        if dest_path.resolve() != path:
+            shutil.copy2(path, dest_path)
+            logger.info(f"Copied raw order report to {dest_path}")
+        target_path = dest_path
+    else:
+        target_path = path
 
-    file_hash = compute_file_hash(dest_path)
-    file_name = dest_path.name
+    file_hash = compute_file_hash(target_path)
+    file_name = target_path.name
     exceptions: List[OrderException] = []
 
     # Read tab-separated file with header whitespace stripping
-    with open(dest_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(target_path, "r", encoding="utf-8", errors="replace") as f:
         header_line = f.readline()
     raw_headers = [h.strip() for h in header_line.split("\t")]
 
     df = pd.read_csv(
-        dest_path,
+        target_path,
         sep="\t",
         names=raw_headers,
         header=0,

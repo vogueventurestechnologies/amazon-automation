@@ -220,7 +220,7 @@ def test_raw_file_copied_untouched(tmp_path: Path, tmp_project: AppConfig):
     f = upload_dir / "my_order_file.txt"
     f.write_text(SAMPLE_HEADER + _make_tsv_row("ORD-1", "IT-1", "SKU-1", "Shipped", "1"), encoding="utf-8")
 
-    res = load_order_report(f, tmp_project, run_id="TEST_COPY")
+    res = load_order_report(f, tmp_project, run_id="TEST_COPY", archive_raw=True)
     copied_file = tmp_project.orders_raw_dir / "my_order_file.txt"
     assert copied_file.exists()
     assert copied_file.read_bytes() == f.read_bytes()
