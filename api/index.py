@@ -65,6 +65,16 @@ def _to_f(val: Any) -> float:
         return 0.0
 
 
+def _is_valid_upload(file_obj: Any) -> bool:
+    """Safely check if an uploaded file object has a non-empty filename and readable stream."""
+    return bool(
+        file_obj is not None
+        and hasattr(file_obj, "filename")
+        and getattr(file_obj, "filename", None)
+        and hasattr(file_obj, "file")
+    )
+
+
 def _build_response_payload(pipeline_res: PipelineResult, report_id: str, is_demo: bool = False) -> Dict[str, Any]:
     """Build fast, clean JSON payload directly from in-memory pipeline result."""
     recon_res = pipeline_res.recon_res
@@ -202,9 +212,9 @@ def reconcile_files(
     to_date: Optional[str] = Form(None),
 ):
     """Reconcile uploaded Order and Payment reports and return dashboard data + report ID."""
-    has_order = isinstance(order_file, UploadFile) and bool(order_file.filename)
-    has_pmt = isinstance(payment_file, UploadFile) and bool(payment_file.filename)
-    has_master = isinstance(master_file, UploadFile) and bool(master_file.filename)
+    has_order = _is_valid_upload(order_file)
+    has_pmt = _is_valid_upload(payment_file)
+    has_master = _is_valid_upload(master_file)
 
     if not has_order and not has_pmt and not has_master:
         raise HTTPException(status_code=400, detail="Please upload at least one Order or Payment report file.")
