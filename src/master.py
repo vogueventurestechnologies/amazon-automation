@@ -177,12 +177,19 @@ def load_master_payout(
             except (InvalidOperation, ValueError):
                 pass
 
-        master_map[raw_sku] = MasterSkuInfo(
+        info = MasterSkuInfo(
             sku_name=raw_sku,
             style_name=style_val,
             payout=payout_val,
         )
+        if raw_sku not in master_map:
+            master_map[raw_sku] = info
+        if raw_sku.upper() not in master_map:
+            master_map[raw_sku.upper()] = info
+
         cache_tuples[raw_sku] = (style_val, payout_str)
+        if raw_sku.upper() not in cache_tuples:
+            cache_tuples[raw_sku.upper()] = (style_val, payout_str)
 
     logger.info(f"Parsed {len(master_map)} unique master SKU lookup entries from {target_file.name}")
 
@@ -198,8 +205,13 @@ def load_master_payout(
 
 
 def lookup_sku(sku: str, master_map: Dict[str, MasterSkuInfo]) -> MasterSkuInfo:
-    """Lookup an SKU in the master payout map. Returns default if not found."""
+    """Lookup an SKU in the master payout map with exact and case-insensitive fallback."""
     clean_key = str(sku or "").strip()
     if clean_key in master_map:
         return master_map[clean_key]
+
+    clean_upper = clean_key.upper()
+    if clean_upper in master_map:
+        return master_map[clean_upper]
+
     return MasterSkuInfo(sku_name=clean_key, style_name="", payout=None)

@@ -187,6 +187,7 @@ def _write_order_pivot_sheet(
         "Quantity",
         "Sku Name",
         "STYLE NAME",
+        "PAYOUT",
         "Order Status",
         "Total Net (₹)",
         "Delivery Status",
@@ -227,6 +228,7 @@ def _write_order_pivot_sheet(
             int(r.get("quantity", 0)),
             sku_val,
             style_val,
+            payout_float if (payout is not None and str(payout).strip() != "") else None,
             str(r.get("order_status", "")),
             tot_net_float,
             status,
@@ -241,16 +243,24 @@ def _write_order_pivot_sheet(
         ws.write_number(current_row, 1, row_vals[1], formats["integer"])
         ws.write_string(current_row, 2, row_vals[2], formats["text"])
         ws.write_string(current_row, 3, row_vals[3], formats["text"])
-        ws.write_string(current_row, 4, row_vals[4], formats["text_center"])
 
-        # Total Net
+        # Col 4: PAYOUT (from master sheet)
+        if row_vals[4] is not None:
+            ws.write_number(current_row, 4, row_vals[4], formats["currency"])
+        else:
+            ws.write_string(current_row, 4, "-", formats["text_center"])
+
+        # Col 5: Order Status
+        ws.write_string(current_row, 5, row_vals[5], formats["text_center"])
+
+        # Col 6: Total Net (₹)
         if tot_net_float is not None:
             net_fmt = formats["diff_negative"] if tot_net_float < 0 else formats["currency"]
-            ws.write_number(current_row, 5, tot_net_float, net_fmt)
+            ws.write_number(current_row, 6, tot_net_float, net_fmt)
         else:
-            ws.write_string(current_row, 5, "", formats["text"])
+            ws.write_string(current_row, 6, "", formats["text"])
 
-        # Delivery status badge format
+        # Col 7: Delivery status badge format
         if status == "Delivered":
             st_fmt = formats["status_delivered"]
         elif status == "RVP":
@@ -262,23 +272,23 @@ def _write_order_pivot_sheet(
         else:
             st_fmt = formats["status_not_settled"]
 
-        ws.write_string(current_row, 6, status, st_fmt)
+        ws.write_string(current_row, 7, status, st_fmt)
 
-        # Delivered Qty and Return Qty
-        ws.write_number(current_row, 7, deliv_qty, formats["integer"])
-        ws.write_number(current_row, 8, ret_qty, formats["integer"])
+        # Col 8 & 9: Delivered Qty and Return Qty
+        ws.write_number(current_row, 8, deliv_qty, formats["integer"])
+        ws.write_number(current_row, 9, ret_qty, formats["integer"])
 
-        # NET PRODUCTION COST (Col 9: J)
+        # Col 10: NET PRODUCTION COST (Col 10: K)
         if status == "Delivered" and prod_cost_float > 0:
-            ws.write_number(current_row, 9, prod_cost_float, formats["currency"])
+            ws.write_number(current_row, 10, prod_cost_float, formats["currency"])
         else:
-            ws.write_number(current_row, 9, 0.0, formats["currency"])
+            ws.write_number(current_row, 10, 0.0, formats["currency"])
 
-        # FINAL NET (₹): Total Net - NET PRODUCTION COST (Col 10: K = F - J)
+        # Col 11: FINAL NET (₹): Total Net - NET PRODUCTION COST (Col 11: L = G - K)
         excel_row_num = current_row + 1
-        formula_final_net = f"=F{excel_row_num}-J{excel_row_num}"
+        formula_final_net = f"=G{excel_row_num}-K{excel_row_num}"
         final_fmt = formats["diff_negative"] if (final_net_float is not None and final_net_float < 0) else formats["currency"]
-        ws.write_formula(current_row, 10, formula_final_net, final_fmt, value=final_net_float)
+        ws.write_formula(current_row, 11, formula_final_net, final_fmt, value=final_net_float)
 
         current_row += 1
 
@@ -294,28 +304,29 @@ def _write_order_pivot_sheet(
         ws.write(total_row, 2, "", formats["total_label"])
         ws.write(total_row, 3, "", formats["total_label"])
         ws.write(total_row, 4, "", formats["total_label"])
+        ws.write(total_row, 5, "", formats["total_label"])
 
-        # Total Net sum (col 5: F)
-        col_net = xlsxwriter.utility.xl_col_to_name(5)
-        ws.write_formula(total_row, 5, f"=SUM({col_net}{HEADER_ROW + 2}:{col_net}{total_row})", formats["total_curr"])
+        # Total Net sum (col 6: G)
+        col_net = xlsxwriter.utility.xl_col_to_name(6)
+        ws.write_formula(total_row, 6, f"=SUM({col_net}{HEADER_ROW + 2}:{col_net}{total_row})", formats["total_curr"])
 
-        ws.write(total_row, 6, "", formats["total_label"])
+        ws.write(total_row, 7, "", formats["total_label"])
 
-        # Delivered Qty sum (col 7: H)
-        col_deliv = xlsxwriter.utility.xl_col_to_name(7)
-        ws.write_formula(total_row, 7, f"=SUM({col_deliv}{HEADER_ROW + 2}:{col_deliv}{total_row})", formats["total_int"])
+        # Delivered Qty sum (col 8: I)
+        col_deliv = xlsxwriter.utility.xl_col_to_name(8)
+        ws.write_formula(total_row, 8, f"=SUM({col_deliv}{HEADER_ROW + 2}:{col_deliv}{total_row})", formats["total_int"])
 
-        # Return Qty sum (col 8: I)
-        col_ret = xlsxwriter.utility.xl_col_to_name(8)
-        ws.write_formula(total_row, 8, f"=SUM({col_ret}{HEADER_ROW + 2}:{col_ret}{total_row})", formats["total_int"])
+        # Return Qty sum (col 9: J)
+        col_ret = xlsxwriter.utility.xl_col_to_name(9)
+        ws.write_formula(total_row, 9, f"=SUM({col_ret}{HEADER_ROW + 2}:{col_ret}{total_row})", formats["total_int"])
 
-        # NET PRODUCTION COST sum (col 9: J)
-        col_prod = xlsxwriter.utility.xl_col_to_name(9)
-        ws.write_formula(total_row, 9, f"=SUM({col_prod}{HEADER_ROW + 2}:{col_prod}{total_row})", formats["total_curr"])
+        # NET PRODUCTION COST sum (col 10: K)
+        col_prod = xlsxwriter.utility.xl_col_to_name(10)
+        ws.write_formula(total_row, 10, f"=SUM({col_prod}{HEADER_ROW + 2}:{col_prod}{total_row})", formats["total_curr"])
 
-        # FINAL NET sum (col 10: K)
-        col_final = xlsxwriter.utility.xl_col_to_name(10)
-        ws.write_formula(total_row, 10, f"=SUM({col_final}{HEADER_ROW + 2}:{col_final}{total_row})", formats["total_curr"])
+        # FINAL NET sum (col 11: L)
+        col_final = xlsxwriter.utility.xl_col_to_name(11)
+        ws.write_formula(total_row, 11, f"=SUM({col_final}{HEADER_ROW + 2}:{col_final}{total_row})", formats["total_curr"])
 
         ws.set_row(total_row, 20)
 

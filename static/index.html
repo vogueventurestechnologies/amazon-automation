@@ -248,6 +248,7 @@
                   <th class="px-3 py-3 text-center whitespace-nowrap">Quantity</th>
                   <th class="px-4 py-3 whitespace-nowrap">Sku Name</th>
                   <th class="px-4 py-3 whitespace-nowrap">STYLE NAME</th>
+                  <th class="px-4 py-3 text-right whitespace-nowrap">PAYOUT</th>
                   <th class="px-4 py-3 text-center whitespace-nowrap">Order Status</th>
                   <th class="px-4 py-3 text-right whitespace-nowrap">Total Net (₹)</th>
                   <th class="px-4 py-3 text-center whitespace-nowrap">Delivery Status</th>
@@ -471,6 +472,9 @@
         const finalNetClass = finalNetVal < 0 ? 'text-red-600 font-bold' : (finalNetVal > 0 ? 'text-emerald-700 font-bold' : 'text-slate-400');
         const skuVal = o.sku_name || o.sku || '-';
         const styleVal = o.style_name || '<span class="text-slate-300">-</span>';
+        const payoutVal = (o.payout !== null && o.payout !== undefined && Number(o.payout) > 0)
+          ? fmtCurr(o.payout)
+          : '<span class="text-slate-300">-</span>';
         const netProdCost = o.net_production_cost !== undefined ? o.net_production_cost : (o.production_cost || 0);
         const prodCostVal = (o.delivery_status === 'Delivered' && netProdCost > 0)
           ? fmtCurr(netProdCost)
@@ -481,6 +485,7 @@
           <td class="px-3 py-2.5 text-center font-bold text-slate-800">${o.quantity}</td>
           <td class="px-4 py-2.5 font-mono text-[11px] text-slate-800 whitespace-nowrap font-semibold" title="${skuVal}">${skuVal}</td>
           <td class="px-4 py-2.5 text-slate-700 whitespace-nowrap font-medium">${styleVal}</td>
+          <td class="px-4 py-2.5 text-right whitespace-nowrap font-semibold text-slate-700">${payoutVal}</td>
           <td class="px-4 py-2.5 text-center whitespace-nowrap text-slate-600">${o.order_status}</td>
           <td class="px-4 py-2.5 text-right whitespace-nowrap ${netClass}">${fmtCurr(o.total_net)}</td>
           <td class="px-4 py-2.5 text-center whitespace-nowrap">${statusBadge}</td>

@@ -59,12 +59,13 @@ def test_excel_export_sheets_and_structure_master_orders_only(tmp_project: AppCo
     # --- 1. Sheet: Order Pivot ---
     ws_pivot = wb["Order Pivot"]
     # Check headers at row 3
-    headers = [ws_pivot.cell(3, c).value for c in range(1, 12)]
+    headers = [ws_pivot.cell(3, c).value for c in range(1, 13)]
     expected_headers = [
         "Amazon Order ID",
         "Quantity",
         "Sku Name",
         "STYLE NAME",
+        "PAYOUT",
         "Order Status",
         "Total Net (₹)",
         "Delivery Status",
@@ -83,13 +84,14 @@ def test_excel_export_sheets_and_structure_master_orders_only(tmp_project: AppCo
             "qty": ws_pivot.cell(r, 2).value,
             "sku": ws_pivot.cell(r, 3).value,
             "style": ws_pivot.cell(r, 4).value,
-            "order_status": ws_pivot.cell(r, 5).value,
-            "total": ws_pivot.cell(r, 6).value,
-            "delivery_status": ws_pivot.cell(r, 7).value,
-            "delivered_qty": ws_pivot.cell(r, 8).value,
-            "return_qty": ws_pivot.cell(r, 9).value,
-            "net_prod_cost": ws_pivot.cell(r, 10).value,
-            "final_net": ws_pivot.cell(r, 11).value,
+            "payout": ws_pivot.cell(r, 5).value,
+            "order_status": ws_pivot.cell(r, 6).value,
+            "total": ws_pivot.cell(r, 7).value,
+            "delivery_status": ws_pivot.cell(r, 8).value,
+            "delivered_qty": ws_pivot.cell(r, 9).value,
+            "return_qty": ws_pivot.cell(r, 10).value,
+            "net_prod_cost": ws_pivot.cell(r, 11).value,
+            "final_net": ws_pivot.cell(r, 12).value,
         }
 
     assert len(order_rows) == 5
@@ -134,11 +136,11 @@ def test_excel_export_sheets_and_structure_master_orders_only(tmp_project: AppCo
     # Check Grand Total row at row 9
     assert ws_pivot.cell(9, 1).value == "Grand Total"
     assert ws_pivot.cell(9, 2).value == "=SUM(B4:B8)"
-    assert ws_pivot.cell(9, 6).value == "=SUM(F4:F8)"
-    assert ws_pivot.cell(9, 8).value == "=SUM(H4:H8)"
+    assert ws_pivot.cell(9, 7).value == "=SUM(G4:G8)"
     assert ws_pivot.cell(9, 9).value == "=SUM(I4:I8)"
     assert ws_pivot.cell(9, 10).value == "=SUM(J4:J8)"
     assert ws_pivot.cell(9, 11).value == "=SUM(K4:K8)"
+    assert ws_pivot.cell(9, 12).value == "=SUM(L4:L8)"
 
 
 def test_excel_export_with_payment_only_orders_sheet(tmp_project: AppConfig):
